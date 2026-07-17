@@ -18,6 +18,10 @@ int main(void){
 
     EstadoSistema estadoAtual = ESTADO_CONTAGEM_65S;
     uint32_t contadorTempoLED1 = 0;
+    
+    // Variável para armazenar o estado anterior do botão (memória)
+    // Inicializa lendo o estado atual do pino antes de entrar no loop
+    uint32_t estadoAnteriorBotao = (DL_GPIO_readPins(GPIO_LEDS_PORT, GPIO_LEDS_USER_INPUT_PIN) & GPIO_LEDS_USER_INPUT_PIN);
 
     while (1) {
         
@@ -25,15 +29,20 @@ int main(void){
         switch (estadoAtual) {
             
             case ESTADO_CONTAGEM_65S:
-                // LÓGICA DO BOTÃO E CONTAGEM DO LED 1
-                // Se o botão (USER_INPUT) for pressionado, reinicia o temporizador
-                if ((DL_GPIO_readPins(GPIO_LEDS_PORT, GPIO_LEDS_USER_INPUT_PIN) & GPIO_LEDS_USER_INPUT_PIN) != 0) {
-                    contadorTempoLED1 = 0; 
+            {
+                // Lê o estado atual do pino PA27
+                uint32_t estadoAtualBotao = (DL_GPIO_readPins(GPIO_LEDS_PORT, GPIO_LEDS_USER_INPUT_PIN) & GPIO_LEDS_USER_INPUT_PIN);
+
+                // Verifica se houve MUDANÇA de estado (variação) em relação à leitura anterior
+                if (estadoAtualBotao != estadoAnteriorBotao) {
+                    contadorTempoLED1 = 0;                  // Reinicia o temporizador apenas na variação
+                    estadoAnteriorBotao = estadoAtualBotao; // Atualiza a memória com o novo estado
                 } else {
-                    contadorTempoLED1++; // Incrementa se o botão NÃO for pressionado
+                    // Se o estado for igual ao anterior (congelado em HIGH ou LOW), o tempo avança
+                    contadorTempoLED1++; 
                 }
 
-                // Se atingir 65.000 iterações (65 segundos) sem interrupção do botão
+                // Se atingir 65.000 iterações (65 segundos) sem NENHUMA variação no pino
                 if (contadorTempoLED1 >= 60000) {
                     DL_GPIO_clearPins(GPIO_LEDS_PORT, GPIO_LEDS_USER_LED_1_PIN); // Apaga o LED 1
                     
@@ -41,21 +50,29 @@ int main(void){
                     estadoAtual = ESTADO_APAGADO_130S; // Transiciona o estado
                 }
                 break;
+            }
 
             case ESTADO_APAGADO_130S:
+            {
                 contadorTempoLED1++; // Incrementa o tempo que o LED 1 passa apagado
 
-                // Se atingir 130.000 iterações (130 segundos)
-                if (contadorTempoLED1 >= 120000) {
+                // Continua atualizando a "memória" do botão mesmo com o LED apagado,
+                // para evitar que uma variação "fantasma" zere o tempo assim que voltar ao estado de 65s.
+                estadoAnteriorBotao = (DL_GPIO_readPins(GPIO_LEDS_PORT, GPIO_LEDS_USER_INPUT_PIN) & GPIO_LEDS_USER_INPUT_PIN);
+
+                // Se atingir 130.000 iterações (80 segundos)
+                if (contadorTempoLED1 >= 80000) {
                     DL_GPIO_setPins(GPIO_LEDS_PORT, GPIO_LEDS_USER_LED_1_PIN); // Liga o LED 1 novamente
                     
                     contadorTempoLED1 = 0;              // Reseta o contador
                     estadoAtual = ESTADO_CONTAGEM_65S;  // Retorna para o estado inicial
                 }
                 break;
+            }
         }
 
         // Base de tempo: espera 1 milissegundo antes de rodar o loop novamente
         delay_cycles(DELAY_1MS);
     }
 }
+
